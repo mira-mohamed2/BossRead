@@ -1,0 +1,122 @@
+import { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { Link } from 'expo-router';
+import { useUIStore } from '../../stores';
+import { signIn } from '../../services/supabase';
+
+export default function LoginScreen() {
+  const colors = useUIStore((s) => s.colors);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+    if (!email.trim() || !password) {
+      Alert.alert('Error', 'Please enter both email and password');
+      return;
+    }
+    setLoading(true);
+    try {
+      await signIn(email.trim(), password);
+    } catch (error: any) {
+      Alert.alert('Login Failed', error.message ?? 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <View style={styles.content}>
+        <Text style={[styles.title, { color: colors.text }]}>ReadFlow</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          Sign in to continue
+        </Text>
+
+        <TextInput
+          style={[
+            styles.input,
+            { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border },
+          ]}
+          placeholder="Email"
+          placeholderTextColor={colors.textSecondary}
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          textContentType="emailAddress"
+          autoComplete="email"
+        />
+
+        <TextInput
+          style={[
+            styles.input,
+            { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border },
+          ]}
+          placeholder="Password"
+          placeholderTextColor={colors.textSecondary}
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          textContentType="password"
+          autoComplete="password"
+        />
+
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: colors.primary, opacity: loading ? 0.6 : 1 }]}
+          onPress={handleLogin}
+          disabled={loading}
+          accessibilityRole="button"
+          accessibilityLabel="Sign in"
+        >
+          <Text style={styles.buttonText}>{loading ? 'Signing in...' : 'Sign In'}</Text>
+        </TouchableOpacity>
+
+        <Link href="/auth/register" asChild>
+          <TouchableOpacity style={styles.linkButton} accessibilityRole="link">
+            <Text style={[styles.linkText, { color: colors.primary }]}>
+              Don't have an account? Sign up
+            </Text>
+          </TouchableOpacity>
+        </Link>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  content: { flex: 1, justifyContent: 'center', paddingHorizontal: 32 },
+  title: { fontSize: 36, fontWeight: '700', textAlign: 'center', marginBottom: 8 },
+  subtitle: { fontSize: 16, textAlign: 'center', marginBottom: 40 },
+  input: {
+    height: 52,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  button: {
+    height: 52,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  buttonText: { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
+  linkButton: { marginTop: 20, alignItems: 'center', padding: 8 },
+  linkText: { fontSize: 15 },
+});

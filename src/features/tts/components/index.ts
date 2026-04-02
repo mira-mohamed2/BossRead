@@ -1,0 +1,1 @@
+export { TTSMiniPlayer } from './TTSMiniPlayer';

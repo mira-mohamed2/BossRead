@@ -1,0 +1,23 @@
+# PowerSync Sync Rules
+# Deploy via the PowerSync dashboard or CLI.
+# Docs: https://docs.powersync.com/usage/sync-rules
+
+bucket_definitions:
+  user_data:
+    # Each bucket contains data for a single authenticated user
+    parameters: SELECT token_parameters.user_id AS user_id
+    data:
+      - SELECT * FROM content_items    WHERE user_id = bucket.user_id
+      - SELECT * FROM annotations      WHERE user_id = bucket.user_id
+      - SELECT * FROM reading_progress  WHERE user_id = bucket.user_id
+      - SELECT * FROM tts_preferences   WHERE user_id = bucket.user_id
+      - SELECT * FROM user_settings     WHERE user_id = bucket.user_id
+
+      # Detail tables join through content_items ownership
+      - SELECT bd.* FROM book_details bd
+          INNER JOIN content_items ci ON ci.id = bd.content_id
+        WHERE ci.user_id = bucket.user_id
+
+      - SELECT ad.* FROM article_details ad
+          INNER JOIN content_items ci ON ci.id = ad.content_id
+        WHERE ci.user_id = bucket.user_id
