@@ -1,9 +1,12 @@
 import { useCallback, useRef } from 'react';
+import { Alert } from 'react-native';
 import { useTTSStore } from '../../../stores';
 import { NativeTTSAdapter } from '../engine/NativeTTSAdapter';
 import { ITTSEngine } from '../engine/types';
 import { chunkText, htmlToPlainText } from '../utils';
 import { db } from '../../../services/powersync';
+import { parseEpub } from '../../../services/parsers/epub';
+import { File } from 'expo-file-system';
 
 /**
  * Hook that controls TTS playback for any content item.
@@ -38,8 +41,33 @@ export function useTTS() {
         if (article?.html_content) {
           text = htmlToPlainText(article.html_content);
         } else {
-          // For books, we'd extract text from the file — placeholder for now
-          text = 'Text extraction from books is not yet implemented.';
+          const [book] = await db.getAll<{ format: string; file_path: string }>(
+            `SELECT format, file_path FROM book_details WHERE content_id = ?`,
+            [contentId],
+          );
+
+          if (!book) {
+            throw new Error('No readable content found for this item.');
+          }
+
+          if (book.format === 'txt') {
+            const txt = await new File(book.file_path).text();
+            text = txt.trim();
+          } else if (book.format === 'epub') {
+            const parsed = await parseEpub(book.file_path);
+            text = parsed.chapters
+              .map((chapter) => htmlToPlainText(chapter.html))
+              .join('\n\n')
+              .trim();
+          } else if (book.format === 'pdf') {
+            throw new Error('PDF text-to-speech is not supported yet.');
+          } else {
+            throw new Error(`Book format not supported for TTS: ${book.format}`);
+          }
+        }
+
+        if (!text) {
+          throw new Error('No text content available for TTS.');
         }
 
         const chunks = chunkText(text);
@@ -48,8 +76,10 @@ export function useTTS() {
         // Start speaking from current chunk index
         await speakFromIndex(chunks, store.currentChunkIndex, engine);
       } catch (err) {
+        const message = err instanceof Error ? err.message : 'Could not start text-to-speech.';
         console.error('TTS error:', err);
         store.setStatus('idle');
+        Alert.alert('TTS unavailable', message);
       }
     },
     [store],

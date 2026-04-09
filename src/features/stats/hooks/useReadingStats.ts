@@ -75,21 +75,26 @@ export function useReadingStats() {
       let streak = 0;
       const today = new Date();
 
-      for (let i = 0; i < sortedDays.length; i++) {
-        const expected = new Date(today);
-        expected.setDate(expected.getDate() - i);
-        const expectedStr = expected.toISOString().slice(0, 10);
-        if (sortedDays[i] === expectedStr) {
-          streak++;
-        } else {
-          if (i === 0) {
-            // check if yesterday
+      // Start from today if present, otherwise from yesterday.
+      if (sortedDays.length > 0) {
+        const todayStr = today.toISOString().slice(0, 10);
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().slice(0, 10);
+
+        let expected = sortedDays[0] === todayStr
+          ? new Date(today)
+          : sortedDays[0] === yesterdayStr
+            ? yesterday
+            : null;
+
+        if (expected) {
+          for (let i = 0; i < sortedDays.length; i++) {
+            const expectedStr = expected.toISOString().slice(0, 10);
+            if (sortedDays[i] !== expectedStr) break;
+            streak++;
             expected.setDate(expected.getDate() - 1);
-            const yesterdayStr = expected.toISOString().slice(0, 10);
-            if (sortedDays[i] === yesterdayStr) {
-              streak++;
-            } else break;
-          } else break;
+          }
         }
       }
       currentStreak = streak;

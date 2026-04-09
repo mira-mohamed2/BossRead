@@ -12,27 +12,40 @@ import { Ionicons } from '@expo/vector-icons';
 import { useUIStore, useBrowserStore, useAuthStore } from '../../stores';
 import { isValidUrl, normalizeUrl, generateId } from '../../utils';
 import { db } from '../../services/powersync';
+import { READABILITY_EXTRACTION_JS, estimateReadingTime } from '../../services/parsers/readability';
+import { sanitizeHtml } from '../../utils/sanitizeHtml';
 
-// Readability.js injection script for extracting article content
-const READABILITY_INJECT = `
+const FALLBACK_EXTRACTION_JS = `
 (function() {
   try {
-    // Simplified content extraction — in production, inject full Readability.js
     var article = document.querySelector('article') || document.body;
-    var title = document.title;
-    var content = article.innerHTML;
-    var siteName = window.location.hostname;
-    
+    var title = document.title || 'Untitled';
+    var content = article ? article.innerHTML : '';
+    var textContent = article ? (article.textContent || '') : '';
+
+    if (!content || !textContent.trim()) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'readability_error',
+        error: 'Fallback extraction returned empty content',
+      }));
+      return;
+    }
+
     window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'article_extracted',
+      type: 'readability_result',
       title: title,
+      author: null,
       content: content,
-      siteName: siteName,
+      textContent: textContent,
+      excerpt: null,
+      siteName: window.location.hostname,
+      length: textContent.length,
       url: window.location.href,
+      fallback: true,
     }));
-  } catch(e) {
+  } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'extraction_error',
+      type: 'readability_error',
       error: e.message,
     }));
   }
@@ -56,6 +69,7 @@ export default function BrowserScreen() {
     setPageTitle,
   } = useBrowserStore();
   const [inputUrl, setInputUrl] = useState('');
+  const [fallbackAttempted, setFallbackAttempted] = useState(false);
 
   const handleGo = useCallback(() => {
     Keyboard.dismiss();
@@ -78,35 +92,52 @@ export default function BrowserScreen() {
 
   const handleSaveArticle = async () => {
     if (!webViewRef.current || !userId) return;
-    webViewRef.current.injectJavaScript(READABILITY_INJECT);
+    setFallbackAttempted(false);
+    webViewRef.current.injectJavaScript(READABILITY_EXTRACTION_JS);
   };
 
   const handleWebViewMessage = async (event: { nativeEvent: { data: string } }) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === 'article_extracted' && userId) {
+      if (data.type === 'readability_result' && userId) {
         const id = generateId();
         const now = new Date().toISOString();
+        const sanitizedHtml = sanitizeHtml(String(data.content ?? ''));
+        const textContent = String(data.textContent ?? '').trim();
+        const wordCount = textContent ? textContent.split(/\s+/).filter(Boolean).length : null;
+        const estimatedReadMinutes = textContent ? estimateReadingTime(textContent) : null;
+        const title = String(data.title ?? 'Untitled').trim() || 'Untitled';
+        const author = data.author ? String(data.author).trim() : null;
+        const urlValue = String(data.url ?? url ?? '');
+        const siteName = data.siteName ? String(data.siteName).trim() : null;
+        const excerpt = data.excerpt ? String(data.excerpt).trim() : null;
 
         await db.writeTransaction(async (tx) => {
           await tx.execute(
             `INSERT INTO content_items (id, type, title, author, cover_uri, language, word_count, created_at, updated_at, deleted_at, user_id)
-             VALUES (?, 'article', ?, NULL, NULL, 'en', NULL, ?, ?, NULL, ?)`,
-            [id, data.title, now, now, userId],
+             VALUES (?, 'article', ?, ?, NULL, 'en', ?, ?, ?, NULL, ?)`,
+            [id, title, author, wordCount, now, now, userId],
           );
           await tx.execute(
             `INSERT INTO article_details (id, content_id, url, site_name, excerpt, html_content, estimated_read_minutes)
-             VALUES (?, ?, ?, ?, NULL, ?, NULL)`,
-            [generateId(), id, data.url, data.siteName, data.content],
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [generateId(), id, urlValue, siteName, excerpt, sanitizedHtml, estimatedReadMinutes],
           );
         });
 
-        Alert.alert('Saved', `"${data.title}" saved to library`);
-      } else if (data.type === 'extraction_error') {
+        Alert.alert('Saved', `"${title}" saved to library`);
+      } else if (data.type === 'readability_error') {
+        if (!fallbackAttempted && webViewRef.current) {
+          setFallbackAttempted(true);
+          webViewRef.current.injectJavaScript(FALLBACK_EXTRACTION_JS);
+          return;
+        }
+
         Alert.alert('Error', 'Could not extract article content');
       }
     } catch (err) {
       console.error('WebView message handling failed:', err);
+      Alert.alert('Error', 'Failed to save article');
     }
   };
 

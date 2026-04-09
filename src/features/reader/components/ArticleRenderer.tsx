@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useUIStore, useReaderStore } from '../../../stores';
+import { sanitizeHtml } from '../../../utils';
 
 interface ArticleRendererProps {
   html: string;
@@ -19,6 +20,7 @@ export function ArticleRenderer({ html, onPositionChange }: ArticleRendererProps
   const lineHeight = useUIStore((s) => s.lineHeight);
   const fontFamily = useUIStore((s) => s.fontFamily);
   const position = useReaderStore((s) => s.position);
+  const safeHtml = sanitizeHtml(html);
 
   const readerCSS = `
     * { box-sizing: border-box; }
@@ -99,8 +101,7 @@ export function ArticleRenderer({ html, onPositionChange }: ArticleRendererProps
       <style>${readerCSS}</style>
     </head>
     <body>
-      ${html}
-      <script>${bridgeJS}</script>
+      ${safeHtml}
     </body>
     </html>
   `;
@@ -110,6 +111,7 @@ export function ArticleRenderer({ html, onPositionChange }: ArticleRendererProps
       <WebView
         ref={webViewRef}
         source={{ html: fullHtml }}
+        injectedJavaScript={bridgeJS}
         style={[styles.webview, { backgroundColor: colors.readerBackground }]}
         originWhitelist={['*']}
         javaScriptEnabled
