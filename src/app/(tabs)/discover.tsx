@@ -196,7 +196,7 @@ export default function DiscoverScreen() {
         keyExtractor={(item, index) => `${item.sourceId}-${item.id}-${index}`}
         renderItem={renderNovelCard}
         contentContainerStyle={styles.list}
-        numColumns={3}
+        numColumns={2}
         columnWrapperStyle={styles.columnWrapper}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   searchInput: { flex: 1, fontSize: 16, height: '100%' },
-  sourceRow: { maxHeight: 48 },
+  sourceRow: { },
   sourceRowContent: { paddingHorizontal: 16, paddingVertical: 8, gap: 8 },
   sourceChip: {
     paddingHorizontal: 14,
@@ -257,15 +257,15 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     overflow: 'hidden',
-    maxWidth: '33%',
+    maxWidth: '48%',
   },
   cover: { width: '100%', aspectRatio: 0.67, borderTopLeftRadius: 10, borderTopRightRadius: 10 },
   coverPlaceholder: { justifyContent: 'center', alignItems: 'center' },
-  cardInfo: { padding: 8 },
-  cardTitle: { fontSize: 12, fontWeight: '600', lineHeight: 16 },
-  cardAuthor: { fontSize: 10, marginTop: 2 },
+  cardInfo: { padding: 10 },
+  cardTitle: { fontSize: 14, fontWeight: '600', lineHeight: 19 },
+  cardAuthor: { fontSize: 12, marginTop: 3 },
   statusBadge: { marginTop: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start' },
-  statusText: { fontSize: 9, fontWeight: '600' },
+  statusText: { fontSize: 10, fontWeight: '600' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 80 },
   emptyText: { fontSize: 16, marginTop: 12 },
 });
