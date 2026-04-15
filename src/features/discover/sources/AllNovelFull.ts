@@ -6,8 +6,8 @@ import { fetchHtml, extractText, extractAll, extractAttr, stripTags, cleanChapte
  */
 export class AllNovelFullSource implements NovelSource {
   id = 'allnovelfull';
-  name = 'AllNovelFull';
-  baseUrl = 'https://allnovelfull.net';
+  name = 'NovGo';
+  baseUrl = 'https://novgo.net';
   language = 'en';
   iconUrl = 'https://allnovelfull.net/favicon.ico';
   supportsSearch = true;
@@ -29,6 +29,13 @@ export class AllNovelFullSource implements NovelSource {
     return this.parseListPage(html, page);
   }
 
+  async getByGenre(genre: string, page: number): Promise<SourcePage<NovelInfo>> {
+    const slug = genre.toLowerCase().replace(/\s+/g, '-');
+    const url = `${this.baseUrl}/genre/${slug}?page=${page}`;
+    const html = await fetchHtml(url);
+    return this.parseListPage(html, page);
+  }
+
   async search(query: string, page: number): Promise<SourcePage<NovelInfo>> {
     const url = `${this.baseUrl}/search?keyword=${encodeURIComponent(query)}&page=${page}`;
     const html = await fetchHtml(url);
@@ -36,16 +43,19 @@ export class AllNovelFullSource implements NovelSource {
   }
 
   async getNovelDetails(novelId: string): Promise<NovelInfo> {
-    const url = `${this.baseUrl}/${novelId}`;
+    const url = `${this.baseUrl}/${novelId}.html`;
     const html = await fetchHtml(url);
 
     const title = extractText(html, /<h3 class="title"[^>]*>([\s\S]*?)<\/h3>/i)
       ?? extractText(html, /<h1[^>]*>([\s\S]*?)<\/h1>/i) ?? novelId;
-    const author = extractText(html, /Author[^<]*<\/th>\s*<td[^>]*>\s*<a[^>]*>([\s\S]*?)<\/a>/i);
-    const coverUrl = extractAttr(html, /<div class="book"[^>]*>\s*<img[^>]*src="([^"]+)"/i);
-    const description = extractText(html, /<div class="desc-text"[^>]*>([\s\S]*?)<\/div>/i);
+    const author = extractText(html, /Author[^<]*<\/(?:th|span)>\s*(?:<td[^>]*>|<span[^>]*>)?\s*<a[^>]*>([\s\S]*?)<\/a>/i)
+      ?? extractText(html, /Author[^<]*<\/(?:th|span)>\s*(?:<td[^>]*>|<span[^>]*>)\s*([\s\S]*?)\s*<\/(?:td|span)>/i);
+    const coverUrl = extractAttr(html, /<div class="book"[^>]*>\s*<img[^>]*src="([^"]+)"/i)
+      ?? extractAttr(html, /<img[^>]*class="[^"]*cover[^"]*"[^>]*src="([^"]+)"/i);
+    const description = extractText(html, /<div class="desc-text"[^>]*>([\s\S]*?)<\/div>/i)
+      ?? extractText(html, /<div[^>]*class="[^"]*description[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
     const genreMatches = extractAll(html, /<a[^>]*href="[^"]*genre[^"]*"[^>]*>([\s\S]*?)<\/a>/gi);
-    const statusText = extractText(html, /Status[^<]*<\/th>\s*<td[^>]*>([\s\S]*?)<\/td>/i) ?? '';
+    const statusText = extractText(html, /Status[^<]*<\/(?:th|span)>\s*(?:<td[^>]*>|<span[^>]*>)\s*([\s\S]*?)\s*<\/(?:td|span)>/i) ?? '';
 
     return {
       id: novelId,
@@ -61,7 +71,7 @@ export class AllNovelFullSource implements NovelSource {
   }
 
   async getChapterList(novelId: string): Promise<ChapterInfo[]> {
-    const url = `${this.baseUrl}/${novelId}`;
+    const url = `${this.baseUrl}/${novelId}.html`;
     const html = await fetchHtml(url);
 
     // Extract novel id for AJAX chapter list
@@ -82,17 +92,23 @@ export class AllNovelFullSource implements NovelSource {
   }
 
   async getChapterContent(novelId: string, chapterId: string): Promise<ChapterContent> {
+    // novgo.net uses full slug URLs like /novel-name/chapter-slug.html
     const url = `${this.baseUrl}/${novelId}/${chapterId}`;
     const html = await fetchHtml(url);
 
     const title = extractText(html, /<a class="chr-title"[^>]*>([\s\S]*?)<\/a>/i)
-      ?? extractText(html, /<span class="chr-text"[^>]*>([\s\S]*?)<\/span>/i) ?? chapterId;
+      ?? extractText(html, /<span class="chr-text"[^>]*>([\s\S]*?)<\/span>/i)
+      ?? extractText(html, /<h2[^>]*>([\s\S]*?)<\/h2>/i) ?? chapterId;
     const content = extractText(html, /<div id="chr-content"[^>]*>([\s\S]*?)<\/div>/i)
-      ?? extractText(html, /<div class="chr-c"[^>]*>([\s\S]*?)<\/div>/i) ?? '';
-    const novelTitle = extractText(html, /<a class="novel-title"[^>]*>([\s\S]*?)<\/a>/i) ?? novelId;
+      ?? extractText(html, /<div class="chr-c"[^>]*>([\s\S]*?)<\/div>/i)
+      ?? extractText(html, /<div[^>]*id="chapter-content"[^>]*>([\s\S]*?)<\/div>/i) ?? '';
+    const novelTitle = extractText(html, /<a class="novel-title"[^>]*>([\s\S]*?)<\/a>/i)
+      ?? extractText(html, /<h1[^>]*>([\s\S]*?)<\/h1>/i) ?? novelId;
 
-    const prevMatch = extractAttr(html, /id="prev_chap"[^>]*href="[^"]*\/([^/"]+)"/i);
-    const nextMatch = extractAttr(html, /id="next_chap"[^>]*href="[^"]*\/([^/"]+)"/i);
+    const prevMatch = extractAttr(html, /id="prev_chap"[^>]*href="[^"]*\/([^/"]+)"/i)
+      ?? extractAttr(html, /class="[^"]*prev[^"]*"[^>]*href="[^"]*\/([^/"]+)"/i);
+    const nextMatch = extractAttr(html, /id="next_chap"[^>]*href="[^"]*\/([^/"]+)"/i)
+      ?? extractAttr(html, /class="[^"]*next[^"]*"[^>]*href="[^"]*\/([^/"]+)"/i);
 
     return {
       title: stripTags(title),
@@ -105,29 +121,33 @@ export class AllNovelFullSource implements NovelSource {
 
   private parseListPage(html: string, page: number): SourcePage<NovelInfo> {
     const items: NovelInfo[] = [];
-    const novelBlocks = html.split(/<div class="row"[^>]*>/gi).slice(1);
 
-    for (const block of novelBlocks) {
-      const href = extractAttr(block, /<a[^>]*href="([^"]+)"[^>]*class="[^"]*"[^>]*>/i)
-        ?? extractAttr(block, /<h3[^>]*>\s*<a[^>]*href="([^"]+)"/i);
-      if (!href) continue;
+    // Match novel links — novgo.net uses <h3><a href="/slug.html">Title</a></h3>
+    const novelPattern = /<h3[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>\s*<\/h3>/gi;
+    let match: RegExpExecArray | null;
 
-      const titleText = extractText(block, /<h3[^>]*>\s*<a[^>]*>([\s\S]*?)<\/a>/i);
-      if (!titleText) continue;
+    while ((match = novelPattern.exec(html)) !== null) {
+      const href = match[1];
+      const titleText = match[2];
+      if (!titleText?.trim()) continue;
 
-      const cover = extractAttr(block, /<img[^>]*src="([^"]+)"/i);
-      const slug = href.replace(/^\//, '').replace(/\/$/, '');
+      // Extract cover image near this link
+      const nearbyHtml = html.substring(Math.max(0, match.index - 500), match.index + match[0].length + 200);
+      const cover = extractAttr(nearbyHtml, /<img[^>]*src="([^"]+)"/i);
+
+      // Derive slug from href: /hidden-marriage.html → hidden-marriage
+      const slug = href.replace(/^\//, '').replace(/\.html$/, '').replace(/\/$/, '');
 
       items.push({
         id: slug,
-        title: stripTags(titleText),
+        title: stripTags(decodeEntities(titleText)),
         author: null,
         coverUrl: cover ? this.resolveUrl(cover) : null,
         description: null,
         genres: [],
         status: 'unknown',
         sourceId: this.id,
-        url: `${this.baseUrl}/${slug}`,
+        url: `${this.baseUrl}/${slug}.html`,
       });
     }
 
@@ -138,14 +158,19 @@ export class AllNovelFullSource implements NovelSource {
 
   private parseChaptersFromPage(html: string, novelId: string): ChapterInfo[] {
     const chapters: ChapterInfo[] = [];
-    const linkPattern = /<a[^>]*href="[^"]*\/([^/"]+)"[^>]*>\s*([\s\S]*?)\s*<\/a>/gi;
+    // Match chapter links that contain the novel slug in the href
+    const escapedNovelId = novelId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const linkPattern = new RegExp(
+      `<a[^>]*href="[^"]*/${escapedNovelId}/([^"]+)"[^>]*>\\s*([\\s\\S]*?)\\s*</a>`,
+      'gi',
+    );
     let match: RegExpExecArray | null;
     let index = 0;
 
     while ((match = linkPattern.exec(html)) !== null) {
-      const chapterSlug = match[1];
+      const chapterSlug = match[1].replace(/\.html$/, '');
       const chapterTitle = stripTags(match[2]);
-      if (!chapterTitle || chapterSlug === novelId) continue;
+      if (!chapterTitle) continue;
 
       chapters.push({
         id: chapterSlug,

@@ -115,8 +115,15 @@ export async function parseEpub(filePath: string): Promise<ParsedEpub> {
   // 6. Extract chapter HTML in spine order
   const chapters: EpubChapter[] = [];
   for (const href of chapterHrefs) {
-    const fullPath = opfDir + href;
-    const chapterFile = zip.file(fullPath);
+    const fullPath = resolveEpubPath(opfDir, href);
+    // Try exact path first, then decoded, then case-insensitive search
+    let chapterFile = zip.file(fullPath)
+      ?? zip.file(decodeURIComponent(fullPath));
+    if (!chapterFile) {
+      // Case-insensitive fallback — some EPUBs have mismatched casing
+      const lowerPath = fullPath.toLowerCase();
+      chapterFile = zip.file(new RegExp('^' + lowerPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i'))[0] ?? null;
+    }
     if (!chapterFile) continue;
 
     const xhtml = await chapterFile.async('text');
@@ -142,6 +149,21 @@ export async function parseEpub(filePath: string): Promise<ParsedEpub> {
 }
 
 // --------------- helpers ---------------
+
+/** Resolve a potentially relative EPUB path (handles ../ segments) */
+function resolveEpubPath(base: string, href: string): string {
+  if (!href.includes('../')) return base + href;
+  const parts = (base + href).split('/');
+  const resolved: string[] = [];
+  for (const part of parts) {
+    if (part === '..') {
+      resolved.pop();
+    } else if (part !== '.' && part !== '') {
+      resolved.push(part);
+    }
+  }
+  return resolved.join('/');
+}
 
 function extractMetadata(opfDoc: Document): EpubMetadata {
   const getText = (tagName: string): string | null => {
